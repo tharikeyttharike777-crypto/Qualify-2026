@@ -1,0 +1,278 @@
+/**
+ * Rotas de Configuração Bancária
+ * Endpoints para gerenciar credenciais bancárias por empresa
+ */
+
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const encryptionService = require('../services/encryption');
+const interBankService = require('../services/interBank');
+
+// Configuração do Multer para upload de certificados
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 50 * 1024 // 50KB máximo para certificados
+    },
+    fileFilter: (req, file, cb) => {
+        // Aceita .crt, .key, .pem
+        const allowedExtensions = ['.crt', '.key', '.pem'];
+        const ext = file.originalname.toLowerCase().slice(file.originalname.lastIndexOf('.'));
+
+        if (allowedExtensions.includes(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Tipo de arquivo não permitido. Use .crt, .key ou .pem'));
+        }
+    }
+});
+
+/**
+ * GET /api/config/:empresaId/bancaria
+ * Retorna configuração bancária (sem dados sensíveis)
+ */
+router.get('/:empresaId/bancaria', async (req, res) => {
+    try {
+        const { empresaId } = req.params;
+        const db = req.app.get('db');
+
+        const configRef = db.collection('empresas').doc(empresaId)
+            .collection('configuracaoBancaria').doc('inter');
+
+        const configDoc = await configRef.get();
+
+        if (!configDoc.exists) {
+            return res.json({
+                configurado: false,
+                banco: null
+            });
+        }
+
+        const config = configDoc.data();
+
+        // Retorna dados públicos apenas
+        res.json({
+            configurado: true,
+            banco: 'inter',
+            ativo: config.ativo || false,
+            chavePix: config.chavePix || null,
+            sandbox: config.sandbox || false,
+            temCertificado: !!(config.certBase64 && config.keyBase64),
+            temCredenciais: !!(config.clientId && config.clientSecret),
+            ultimoTeste: config.ultimoTeste || null,
+            atualizadoEm: config.atualizadoEm || null
+        });
+
+    } catch (error) {
+        console.error('Erro ao buscar config:', error);
+        res.status(500).json({ error: 'Erro ao buscar configuração' });
+    }
+});
+
+/**
+ * POST /api/config/:empresaId/bancaria/inter
+ * Salva ou atualiza configuração do Banco Inter
+ */
+router.post('/:empresaId/bancaria/inter',
+    upload.fields([
+        { name: 'certificado', maxCount: 1 },
+        { name: 'chavePrivada', maxCount: 1 }
+    ]),
+    async (req, res) => {
+        try {
+            const { empresaId } = req.params;
+            const { clientId, clientSecret, chavePix, sandbox } = req.body;
+            const db = req.app.get('db');
+
+            // Validações
+            if (!clientId || !clientSecret) {
+                return res.status(400).json({
+                    error: 'Client ID e Client Secret são obrigatórios'
+                });
+            }
+
+            if (!chavePix) {
+                return res.status(400).json({
+                    error: 'Chave PIX é obrigatória'
+                });
+            }
+
+            // Prepara dados para salvar
+            const configData = {
+                banco: 'inter',
+                clientId: encryptionService.encrypt(clientId),
+                clientSecret: encryptionService.encrypt(clientSecret),
+                chavePix: chavePix,
+                sandbox: sandbox === 'true' || sandbox === true,
+                ativo: false, // Será ativado após teste
+                atualizadoEm: new Date()
+            };
+
+            // Processa certificados se enviados
+            if (req.files) {
+                if (req.files.certificado && req.files.certificado[0]) {
+                    const certBuffer = req.files.certificado[0].buffer;
+                    configData.certBase64 = certBuffer.toString('base64');
+                }
+
+                if (req.files.chavePrivada && req.files.chavePrivada[0]) {
+                    const keyBuffer = req.files.chavePrivada[0].buffer;
+                    configData.keyBase64 = keyBuffer.toString('base64');
+                }
+            }
+
+            // Salva no Firestore
+            const configRef = db.collection('empresas').doc(empresaId)
+                .collection('configuracaoBancaria').doc('inter');
+
+            await configRef.set(configData, { merge: true });
+
+            // Limpa cache de tokens
+            interBankService.limparCache(empresaId);
+
+            res.json({
+                success: true,
+                message: 'Configuração salva. Execute o teste de conexão para ativar.',
+                temCertificado: !!(configData.certBase64 && configData.keyBase64)
+            });
+
+        } catch (error) {
+            console.error('Erro ao salvar config:', error);
+            res.status(500).json({ error: error.message || 'Erro ao salvar configuração' });
+        }
+    }
+);
+
+/**
+ * POST /api/config/:empresaId/bancaria/testar
+ * Testa conexão com o banco
+ */
+router.post('/:empresaId/bancaria/testar', async (req, res) => {
+    try {
+        const { empresaId } = req.params;
+        const db = req.app.get('db');
+
+        // Busca configuração
+        const configRef = db.collection('empresas').doc(empresaId)
+            .collection('configuracaoBancaria').doc('inter');
+
+        const configDoc = await configRef.get();
+
+        if (!configDoc.exists) {
+            return res.status(404).json({
+                error: 'Configuração não encontrada',
+                success: false
+            });
+        }
+
+        const config = configDoc.data();
+        config.id = empresaId;
+
+        // Tenta obter token (isso valida credenciais e certificados)
+        await interBankService.getAccessToken(config);
+
+        // Se chegou aqui, conexão OK - ativa integração
+        await configRef.update({
+            ativo: true,
+            ultimoTeste: new Date(),
+            ultimoTesteStatus: 'sucesso'
+        });
+
+        res.json({
+            success: true,
+            message: 'Conexão com Banco Inter estabelecida com sucesso!',
+            ativo: true
+        });
+
+    } catch (error) {
+        console.error('Erro no teste de conexão:', error);
+
+        // Salva falha no Firestore
+        try {
+            const db = req.app.get('db');
+            const { empresaId } = req.params;
+
+            await db.collection('empresas').doc(empresaId)
+                .collection('configuracaoBancaria').doc('inter')
+                .update({
+                    ativo: false,
+                    ultimoTeste: new Date(),
+                    ultimoTesteStatus: 'falha',
+                    ultimoTesteErro: error.message
+                });
+        } catch (e) {
+            console.error('Erro ao salvar status de falha:', e);
+        }
+
+        res.status(400).json({
+            success: false,
+            error: error.message || 'Falha na conexão com Banco Inter',
+            details: 'Verifique Client ID, Client Secret e certificados'
+        });
+    }
+});
+
+/**
+ * DELETE /api/config/:empresaId/bancaria/inter
+ * Remove configuração bancária
+ */
+router.delete('/:empresaId/bancaria/inter', async (req, res) => {
+    try {
+        const { empresaId } = req.params;
+        const db = req.app.get('db');
+
+        await db.collection('empresas').doc(empresaId)
+            .collection('configuracaoBancaria').doc('inter')
+            .delete();
+
+        // Limpa cache
+        interBankService.limparCache(empresaId);
+
+        res.json({
+            success: true,
+            message: 'Configuração removida com sucesso'
+        });
+
+    } catch (error) {
+        console.error('Erro ao remover config:', error);
+        res.status(500).json({ error: 'Erro ao remover configuração' });
+    }
+});
+
+/**
+ * GET /api/config/:empresaId/bancos-disponiveis
+ * Lista bancos disponíveis para integração
+ */
+router.get('/:empresaId/bancos-disponiveis', (req, res) => {
+    res.json({
+        bancos: [
+            {
+                id: 'inter',
+                nome: 'Banco Inter',
+                logo: '/assets/images/bancos/inter.png',
+                funcionalidades: ['pix', 'boleto'],
+                status: 'disponivel',
+                requerCertificado: true
+            },
+            {
+                id: 'asaas',
+                nome: 'Asaas',
+                logo: '/assets/images/bancos/asaas.png',
+                funcionalidades: ['pix', 'boleto', 'cartao'],
+                status: 'em_breve',
+                requerCertificado: false
+            },
+            {
+                id: 'pagarme',
+                nome: 'Pagar.me',
+                logo: '/assets/images/bancos/pagarme.png',
+                funcionalidades: ['pix', 'boleto', 'cartao'],
+                status: 'em_breve',
+                requerCertificado: false
+            }
+        ]
+    });
+});
+
+module.exports = router;
