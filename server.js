@@ -13,8 +13,19 @@ const admin = require('firebase-admin');
 // Inicialização do Firebase Admin
 const initFirebaseAdmin = () => {
     try {
-        const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './serviceAccountKey.json';
-        const serviceAccount = require(serviceAccountPath);
+        let serviceAccount;
+
+        // Tenta carregar do JSON em variável de ambiente (produção)
+        if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+            console.log('📦 Carregando Firebase de variável de ambiente...');
+            serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        }
+        // Fallback para arquivo local (desenvolvimento)
+        else {
+            const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './serviceAccountKey.json';
+            console.log('📁 Carregando Firebase de arquivo:', serviceAccountPath);
+            serviceAccount = require(serviceAccountPath);
+        }
 
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
@@ -24,7 +35,7 @@ const initFirebaseAdmin = () => {
         return admin.firestore();
     } catch (error) {
         console.error('❌ Erro ao inicializar Firebase Admin:', error.message);
-        console.log('⚠️  Certifique-se de que o arquivo serviceAccountKey.json existe no diretório backend/');
+        console.log('⚠️  Configure FIREBASE_SERVICE_ACCOUNT ou serviceAccountKey.json');
         process.exit(1);
     }
 };
