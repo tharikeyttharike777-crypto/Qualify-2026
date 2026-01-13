@@ -45,23 +45,12 @@ const db = initFirebaseAdmin();
 // Inicialização do Express
 const app = express();
 
-// Middleware de CORS - permite todas as origens em desenvolvimento
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5500').split(',');
+// Middleware de CORS - permite todas as origens para API pública
 app.use(cors({
-    origin: (origin, callback) => {
-        // Em desenvolvimento, permite qualquer origem (incluindo file://)
-        if (process.env.NODE_ENV === 'development' || !origin) {
-            return callback(null, true);
-        }
-
-        if (allowedOrigins.some(allowed => origin.startsWith(allowed.trim()))) {
-            return callback(null, true);
-        }
-
-        console.warn(`⚠️ CORS bloqueou origem: ${origin}`);
-        return callback(new Error('Não permitido por CORS'), false);
-    },
-    credentials: true
+    origin: true, // Permite qualquer origem
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Parsing de JSON
