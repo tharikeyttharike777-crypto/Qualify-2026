@@ -130,7 +130,9 @@ router.post('/cob', loadBankConfig, async (req, res) => {
  */
 router.post('/cobv', loadBankConfig, async (req, res) => {
     try {
-        const { valor, descricao, pagador, vencimento, diasAposVencimento, invoiceId } = req.body;
+        let { valor, descricao, pagador, vencimento, diasAposVencimento, invoiceId } = req.body;
+
+        console.log('📥 Requisição PIX recebida:', { valor, vencimento, pagador, descricao });
 
         // Validações
         if (!valor || valor <= 0) {
@@ -144,6 +146,17 @@ router.post('/cobv', loadBankConfig, async (req, res) => {
         if (!pagador || (!pagador.cpf && !pagador.cnpj)) {
             return res.status(400).json({ error: 'CPF ou CNPJ do pagador é obrigatório' });
         }
+
+        // Converte data de DD/MM/YYYY para YYYY-MM-DD se necessário
+        if (vencimento.includes('/')) {
+            const partes = vencimento.split('/');
+            if (partes.length === 3) {
+                vencimento = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
+                console.log('📅 Data convertida para:', vencimento);
+            }
+        }
+
+        console.log('🔄 Chamando interBankService.criarPixVencimento...');
 
         // Cria cobrança no Banco Inter
         const resultado = await interBankService.criarPixVencimento(req.bankConfig, {

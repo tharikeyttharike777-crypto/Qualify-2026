@@ -249,6 +249,10 @@ class InterBankService {
             payload.devedor.cnpj = dados.pagador.cnpj.replace(/\D/g, '');
         }
 
+        console.log('📤 Enviando requisição PIX para Banco Inter:');
+        console.log('   - URL:', url);
+        console.log('   - Payload:', JSON.stringify(payload, null, 2));
+
         try {
             const response = await axios.put(url, payload, {
                 httpsAgent,
@@ -257,6 +261,8 @@ class InterBankService {
                     'Content-Type': 'application/json'
                 }
             });
+
+            console.log('✅ Resposta do Banco Inter:', response.status);
 
             const cobranca = response.data;
 
