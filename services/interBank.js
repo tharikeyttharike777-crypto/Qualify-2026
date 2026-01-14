@@ -7,7 +7,7 @@ const axios = require('axios');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const CryptoJS = require('crypto-js');
+const encryptionService = require('./encryption');
 
 class InterBankService {
     constructor() {
@@ -24,15 +24,19 @@ class InterBankService {
     }
 
     /**
-     * Descriptografa credenciais armazenadas
+     * Descriptografa credenciais armazenadas (usa o serviço centralizado)
      */
     decryptCredential(encryptedValue) {
-        const key = process.env.ENCRYPTION_KEY;
-        if (!key) {
-            throw new Error('ENCRYPTION_KEY não configurada');
+        // Se criptografia não estiver ativa, retorna o valor como está
+        if (!encryptionService.isConfigured()) {
+            return encryptedValue;
         }
-        const bytes = CryptoJS.AES.decrypt(encryptedValue, key);
-        return bytes.toString(CryptoJS.enc.Utf8);
+        const decrypted = encryptionService.decrypt(encryptedValue);
+        if (!decrypted) {
+            // Se falhou ao descriptografar, assume que não está criptografado
+            return encryptedValue;
+        }
+        return decrypted;
     }
 
     /**
