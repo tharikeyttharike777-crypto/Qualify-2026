@@ -63,9 +63,19 @@ class InterBankService {
         }
 
         try {
+            console.log('🔐 Iniciando autenticação Inter para empresa:', empresaId);
+
             // Descriptografa credenciais
             const clientId = this.decryptCredential(empresaConfig.clientId);
             const clientSecret = this.decryptCredential(empresaConfig.clientSecret);
+
+            console.log('📋 Credenciais obtidas:');
+            console.log('   - Client ID length:', clientId?.length || 0);
+            console.log('   - Client Secret length:', clientSecret?.length || 0);
+            console.log('   - Chave PIX:', empresaConfig.chavePix || 'NÃO DEFINIDA');
+            console.log('   - Sandbox:', empresaConfig.sandbox);
+            console.log('   - Tem certBase64:', !!empresaConfig.certBase64);
+            console.log('   - Tem keyBase64:', !!empresaConfig.keyBase64);
 
             // Lê certificados (podem estar em base64 no Firestore ou em arquivos)
             let certContent, keyContent;
@@ -74,12 +84,17 @@ class InterBankService {
                 // Certificados armazenados em base64
                 certContent = Buffer.from(empresaConfig.certBase64, 'base64').toString('utf8');
                 keyContent = Buffer.from(empresaConfig.keyBase64, 'base64').toString('utf8');
+                console.log('✅ Certificados carregados do Firestore');
+                console.log('   - Cert length:', certContent?.length || 0);
+                console.log('   - Key length:', keyContent?.length || 0);
             } else if (empresaConfig.certPath && empresaConfig.keyPath) {
                 // Certificados em arquivos locais
                 const certsDir = path.join(__dirname, '..', 'certs', empresaId);
                 certContent = fs.readFileSync(path.join(certsDir, 'cert.crt'), 'utf8');
                 keyContent = fs.readFileSync(path.join(certsDir, 'cert.key'), 'utf8');
+                console.log('✅ Certificados carregados de arquivos locais');
             } else {
+                console.error('❌ Certificados não encontrados!');
                 throw new Error('Certificados não configurados para esta empresa');
             }
 
@@ -88,11 +103,15 @@ class InterBankService {
 
             // Request de token
             const tokenUrl = `${baseUrl}/oauth/v2/token`;
+            console.log('🌐 URL de token:', tokenUrl);
+
             const params = new URLSearchParams();
             params.append('client_id', clientId);
             params.append('client_secret', clientSecret);
             params.append('grant_type', 'client_credentials');
             params.append('scope', 'cob.read cob.write cobv.read cobv.write pix.read pix.write boleto-cobranca.read boleto-cobranca.write');
+
+            console.log('📤 Enviando request de token...');
 
             const response = await axios.post(tokenUrl, params, {
                 httpsAgent,
@@ -113,8 +132,13 @@ class InterBankService {
             return access_token;
 
         } catch (error) {
-            console.error(`❌ Erro ao obter token para empresa ${empresaId}:`, error.message);
-            throw new Error(`Falha na autenticação com Banco Inter: ${error.message}`);
+            console.error(`❌ Erro ao obter token para empresa ${empresaId}:`);
+            console.error('   - Mensagem:', error.message);
+            if (error.response) {
+                console.error('   - Status:', error.response.status);
+                console.error('   - Data:', JSON.stringify(error.response.data));
+            }
+            throw new Error(`Falha na autenticação com Banco Inter: ${error.response?.data?.error_description || error.message}`);
         }
     }
 

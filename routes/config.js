@@ -51,6 +51,16 @@ router.get('/:empresaId/bancaria', async (req, res) => {
 
         const config = configDoc.data();
 
+        // Diagnóstico detalhado (sem expor dados sensíveis)
+        const diagnostico = {
+            clientIdLength: config.clientId?.length || 0,
+            clientSecretLength: config.clientSecret?.length || 0,
+            certBase64Length: config.certBase64?.length || 0,
+            keyBase64Length: config.keyBase64?.length || 0,
+            ultimoTesteStatus: config.ultimoTesteStatus || null,
+            ultimoTesteErro: config.ultimoTesteErro || null
+        };
+
         // Retorna dados públicos apenas
         res.json({
             configurado: true,
@@ -61,7 +71,8 @@ router.get('/:empresaId/bancaria', async (req, res) => {
             temCertificado: !!(config.certBase64 && config.keyBase64),
             temCredenciais: !!(config.clientId && config.clientSecret),
             ultimoTeste: config.ultimoTeste || null,
-            atualizadoEm: config.atualizadoEm || null
+            atualizadoEm: config.atualizadoEm || null,
+            diagnostico: diagnostico
         });
 
     } catch (error) {
