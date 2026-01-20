@@ -96,10 +96,24 @@ router.post('/:empresaId/bancaria/inter',
             const { clientId, clientSecret, chavePix, sandbox } = req.body;
             const db = req.app.get('db');
 
-            // Validações
-            if (!clientId || !clientSecret) {
+            // Busca configuração existente
+            const configRef = db.collection('empresas').doc(empresaId)
+                .collection('configuracaoBancaria').doc('inter');
+            const existingDoc = await configRef.get();
+            const existingConfig = existingDoc.exists ? existingDoc.data() : {};
+
+            // Validações - só exige se não tem credenciais salvas
+            const temCredenciaisSalvas = !!(existingConfig.clientId && existingConfig.clientSecret);
+
+            if (!clientId && !temCredenciaisSalvas) {
                 return res.status(400).json({
-                    error: 'Client ID e Client Secret são obrigatórios'
+                    error: 'Client ID é obrigatório'
+                });
+            }
+
+            if (!clientSecret && !temCredenciaisSalvas) {
+                return res.status(400).json({
+                    error: 'Client Secret é obrigatório'
                 });
             }
 
@@ -109,34 +123,39 @@ router.post('/:empresaId/bancaria/inter',
                 });
             }
 
-            // Prepara dados para salvar
+            // Prepara dados para salvar (mantém existentes se não enviados)
             const configData = {
                 banco: 'inter',
-                clientId: encryptionService.encrypt(clientId),
-                clientSecret: encryptionService.encrypt(clientSecret),
+                clientId: clientId ? encryptionService.encrypt(clientId) : existingConfig.clientId,
+                clientSecret: clientSecret ? encryptionService.encrypt(clientSecret) : existingConfig.clientSecret,
                 chavePix: chavePix,
                 sandbox: sandbox === 'true' || sandbox === true,
                 ativo: false, // Será ativado após teste
                 atualizadoEm: new Date()
             };
 
-            // Processa certificados se enviados
+            // Processa certificados se enviados (mantém existentes se não enviados)
             if (req.files) {
                 if (req.files.certificado && req.files.certificado[0]) {
                     const certBuffer = req.files.certificado[0].buffer;
                     configData.certBase64 = certBuffer.toString('base64');
+                } else if (existingConfig.certBase64) {
+                    configData.certBase64 = existingConfig.certBase64;
                 }
 
                 if (req.files.chavePrivada && req.files.chavePrivada[0]) {
                     const keyBuffer = req.files.chavePrivada[0].buffer;
                     configData.keyBase64 = keyBuffer.toString('base64');
+                } else if (existingConfig.keyBase64) {
+                    configData.keyBase64 = existingConfig.keyBase64;
                 }
+            } else {
+                // Mantém certificados existentes se não foram enviados novos
+                if (existingConfig.certBase64) configData.certBase64 = existingConfig.certBase64;
+                if (existingConfig.keyBase64) configData.keyBase64 = existingConfig.keyBase64;
             }
 
             // Salva no Firestore
-            const configRef = db.collection('empresas').doc(empresaId)
-                .collection('configuracaoBancaria').doc('inter');
-
             await configRef.set(configData, { merge: true });
 
             // Limpa cache de tokens
