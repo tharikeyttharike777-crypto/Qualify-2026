@@ -53,10 +53,22 @@ class InterBankService {
      * Cria agente HTTPS com certificados mTLS
      */
     createHttpsAgent(certContent, keyContent) {
+        // Garante que os certificados são Buffers ou strings válidas
+        const cert = Buffer.isBuffer(certContent) ? certContent : Buffer.from(certContent, 'utf8');
+        const key = Buffer.isBuffer(keyContent) ? keyContent : Buffer.from(keyContent, 'utf8');
+
+        console.log('🔐 Criando HTTPS Agent com certificados:');
+        console.log('   - Cert é Buffer:', Buffer.isBuffer(cert));
+        console.log('   - Cert length:', cert.length);
+        console.log('   - Cert começa com:', cert.toString('utf8').substring(0, 30));
+        console.log('   - Key é Buffer:', Buffer.isBuffer(key));
+        console.log('   - Key length:', key.length);
+
         return new https.Agent({
-            cert: certContent,
-            key: keyContent,
-            rejectUnauthorized: true
+            cert: cert,
+            key: key,
+            rejectUnauthorized: false, // Importante para ambientes cloud como Render
+            pfx: undefined // Garante que não usa pfx
         });
     }
 
@@ -94,12 +106,13 @@ class InterBankService {
             let certContent, keyContent;
 
             if (empresaConfig.certBase64 && empresaConfig.keyBase64) {
-                // Certificados armazenados em base64
-                certContent = Buffer.from(empresaConfig.certBase64, 'base64').toString('utf8');
-                keyContent = Buffer.from(empresaConfig.keyBase64, 'base64').toString('utf8');
-                console.log('✅ Certificados carregados do Firestore');
-                console.log('   - Cert length:', certContent?.length || 0);
-                console.log('   - Key length:', keyContent?.length || 0);
+                // Certificados armazenados em base64 - manter como Buffer
+                certContent = Buffer.from(empresaConfig.certBase64, 'base64');
+                keyContent = Buffer.from(empresaConfig.keyBase64, 'base64');
+                console.log('✅ Certificados carregados do Firestore (como Buffer)');
+                console.log('   - Cert Buffer length:', certContent.length);
+                console.log('   - Key Buffer length:', keyContent.length);
+                console.log('   - Cert preview:', certContent.toString('utf8').substring(0, 50));
             } else if (empresaConfig.certPath && empresaConfig.keyPath) {
                 // Certificados em arquivos locais
                 const certsDir = path.join(__dirname, '..', 'certs', empresaId);
