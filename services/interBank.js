@@ -244,21 +244,37 @@ class InterBankService {
             solicitacaoPagador: dados.descricao || 'Cobrança QUALIFY'
         };
 
+        // Adiciona endereço se disponível (evita erro 400)
+        if (dados.pagador.endereco) {
+            payload.devedor.logradouro = dados.pagador.endereco.logradouro || '';
+            payload.devedor.cidade = dados.pagador.endereco.cidade || '';
+            payload.devedor.uf = dados.pagador.endereco.uf || '';
+            payload.devedor.cep = dados.pagador.endereco.cep?.replace(/\D/g, '') || '';
+        }
+
         // Se for CNPJ ao invés de CPF
         if (dados.pagador.cnpj) {
             delete payload.devedor.cpf;
             payload.devedor.cnpj = dados.pagador.cnpj.replace(/\D/g, '');
         }
 
-        try {
-            const response = await axios.put(url, payload, {
+        console.log('📤 Enviando requisição PIX para Banco Inter:');
+        console.log('   - URL:', url);
+        console.log('   - Payload:', JSON.stringify(payload, null, 2));
+
+        // Função para fazer a requisição (usada no retry)
+        const fazerRequisicao = async (token) => {
+            return await axios.put(url, payload, {
                 httpsAgent,
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
+        };
 
+        try {
+            const response = await fazerRequisicao(accessToken);
             const cobranca = response.data;
 
             return {
@@ -273,6 +289,37 @@ class InterBankService {
             };
 
         } catch (error) {
+            // RETRY AUTOMÁTICO EM CASO DE 401
+            if (error.response?.status === 401) {
+                console.warn('⚠️ Token rejeitado (401), limpando cache e tentando novamente...');
+
+                // Limpa cache do token
+                this.limparCache(empresaConfig.id);
+
+                // Obtém novo token
+                const novoToken = await this.getAccessToken(empresaConfig);
+                console.log('✅ Novo token obtido, retentando requisição...');
+
+                try {
+                    const retryResponse = await fazerRequisicao(novoToken);
+                    const cobranca = retryResponse.data;
+
+                    return {
+                        txid: cobranca.txid,
+                        status: cobranca.status,
+                        qrcode: cobranca.pixCopiaECola,
+                        imagemQrcode: cobranca.imagemQrcode ?
+                            `data:image/png;base64,${cobranca.imagemQrcode}` : null,
+                        valor: cobranca.valor?.original,
+                        criacao: cobranca.calendario?.criacao,
+                        expiracao: cobranca.calendario?.expiracao
+                    };
+                } catch (retryError) {
+                    console.error('❌ Retry também falhou:', retryError.response?.data || retryError.message);
+                    throw new Error(`Falha ao criar cobrança PIX (após retry): ${retryError.response?.data?.detail || retryError.message}`);
+                }
+            }
+
             console.error('❌ Erro ao criar PIX:', error.response?.data || error.message);
             throw new Error(`Falha ao criar cobrança PIX: ${error.response?.data?.detail || error.message}`);
         }
