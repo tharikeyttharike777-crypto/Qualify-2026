@@ -143,7 +143,18 @@ class InterBankService {
             params.append('client_id', clientIdClean);
             params.append('client_secret', clientSecretClean);
             params.append('grant_type', 'client_credentials');
-            params.append('scope', 'boleto-cobranca.read boleto-cobranca.write cob.read cob.write'); // Escopos de cobrança
+
+            // ESCOPO HARDCODED - NÃO MUDE ISSO!
+            const SCOPE_COBRANCA = 'boleto-cobranca.read boleto-cobranca.write cob.read cob.write';
+            params.append('scope', SCOPE_COBRANCA);
+
+            console.log('');
+            console.log('╔══════════════════════════════════════════════════════════════╗');
+            console.log('║           📋 ESCOPO SENDO ENVIADO AO BANCO INTER              ║');
+            console.log('╠══════════════════════════════════════════════════════════════╣');
+            console.log('║ SCOPE:', SCOPE_COBRANCA);
+            console.log('╚══════════════════════════════════════════════════════════════╝');
+            console.log('');
 
             console.log('📤 Enviando request de token...');
             console.log('   - Params:', params.toString().replace(clientSecretClean, '***SECRET***'));
