@@ -211,14 +211,20 @@ class InterBankService {
         const accessToken = await this.getAccessToken(empresaConfig);
         const baseUrl = this.getBaseUrl(empresaConfig.sandbox);
 
-        // Descriptografa e prepara certificados
+        // CRÍTICO: Carregar certificados como BUFFER para mTLS funcionar
         let certContent, keyContent;
         if (empresaConfig.certBase64 && empresaConfig.keyBase64) {
-            certContent = Buffer.from(empresaConfig.certBase64, 'base64').toString('utf8');
-            keyContent = Buffer.from(empresaConfig.keyBase64, 'base64').toString('utf8');
+            certContent = Buffer.from(empresaConfig.certBase64, 'base64');
+            keyContent = Buffer.from(empresaConfig.keyBase64, 'base64');
+            console.log('🔐 Certificados carregados para PIX (Buffer):');
+            console.log('   - Cert Buffer length:', certContent.length);
+            console.log('   - Key Buffer length:', keyContent.length);
+        } else {
+            throw new Error('Certificados não configurados para esta empresa');
         }
 
         const httpsAgent = this.createHttpsAgent(certContent, keyContent);
+        console.log('✅ httpsAgent criado para requisição PIX');
 
         const txid = this.gerarTxId();
         const url = `${baseUrl}/pix/v2/cob/${txid}`;
@@ -279,10 +285,14 @@ class InterBankService {
         const accessToken = await this.getAccessToken(empresaConfig);
         const baseUrl = this.getBaseUrl(empresaConfig.sandbox);
 
+        // CRÍTICO: Carregar certificados como BUFFER para mTLS funcionar
         let certContent, keyContent;
         if (empresaConfig.certBase64 && empresaConfig.keyBase64) {
-            certContent = Buffer.from(empresaConfig.certBase64, 'base64').toString('utf8');
-            keyContent = Buffer.from(empresaConfig.keyBase64, 'base64').toString('utf8');
+            certContent = Buffer.from(empresaConfig.certBase64, 'base64');
+            keyContent = Buffer.from(empresaConfig.keyBase64, 'base64');
+            console.log('🔐 Certificados carregados para PIX Vencimento (Buffer)');
+        } else {
+            throw new Error('Certificados não configurados para esta empresa');
         }
 
         const httpsAgent = this.createHttpsAgent(certContent, keyContent);
@@ -351,10 +361,13 @@ class InterBankService {
         const accessToken = await this.getAccessToken(empresaConfig);
         const baseUrl = this.getBaseUrl(empresaConfig.sandbox);
 
+        // CRÍTICO: Carregar certificados como BUFFER para mTLS funcionar
         let certContent, keyContent;
         if (empresaConfig.certBase64 && empresaConfig.keyBase64) {
-            certContent = Buffer.from(empresaConfig.certBase64, 'base64').toString('utf8');
-            keyContent = Buffer.from(empresaConfig.keyBase64, 'base64').toString('utf8');
+            certContent = Buffer.from(empresaConfig.certBase64, 'base64');
+            keyContent = Buffer.from(empresaConfig.keyBase64, 'base64');
+        } else {
+            throw new Error('Certificados não configurados para esta empresa');
         }
 
         const httpsAgent = this.createHttpsAgent(certContent, keyContent);
