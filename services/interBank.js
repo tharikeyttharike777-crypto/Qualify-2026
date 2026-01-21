@@ -131,13 +131,22 @@ class InterBankService {
             const tokenUrl = `${baseUrl}/oauth/v2/token`;
             console.log('🌐 URL de token:', tokenUrl);
 
+            // IMPORTANTE: trim() para remover espaços invisíveis de copiar/colar
+            const clientIdClean = clientId.trim();
+            const clientSecretClean = clientSecret.trim();
+
+            console.log('🔍 Credenciais limpas:');
+            console.log('   - Client ID length após trim:', clientIdClean.length);
+            console.log('   - Client Secret length após trim:', clientSecretClean.length);
+
             const params = new URLSearchParams();
-            params.append('client_id', clientId);
-            params.append('client_secret', clientSecret);
+            params.append('client_id', clientIdClean);
+            params.append('client_secret', clientSecretClean);
             params.append('grant_type', 'client_credentials');
-            params.append('scope', 'cob.write cob.read');
+            params.append('scope', 'extrato.read'); // Escopo básico para teste
 
             console.log('📤 Enviando request de token...');
+            console.log('   - Params:', params.toString().replace(clientSecretClean, '***SECRET***'));
 
             const response = await axios.post(tokenUrl, params, {
                 httpsAgent,
@@ -158,13 +167,29 @@ class InterBankService {
             return access_token;
 
         } catch (error) {
-            console.error(`❌ Erro ao obter token para empresa ${empresaId}:`);
-            console.error('   - Mensagem:', error.message);
+            console.error('');
+            console.error('╔══════════════════════════════════════════════════════════════╗');
+            console.error('║         ❌❌❌ ERRO BANCO INTER - DETALHES COMPLETOS ❌❌❌          ║');
+            console.error('╠══════════════════════════════════════════════════════════════╣');
+            console.error('║ Empresa ID:', empresaId);
+            console.error('║ Mensagem:', error.message);
+            console.error('║ Código:', error.code || 'N/A');
             if (error.response) {
-                console.error('   - Status:', error.response.status);
-                console.error('   - Data:', JSON.stringify(error.response.data));
+                console.error('║ HTTP Status:', error.response.status);
+                console.error('║ Status Text:', error.response.statusText);
+                console.error('║ Response Headers:', JSON.stringify(error.response.headers, null, 2));
+                console.error('║ Response Data (RAW):', JSON.stringify(error.response.data, null, 2));
+                console.error('║ Error Description:', error.response.data?.error_description || 'N/A');
+                console.error('║ Error:', error.response.data?.error || 'N/A');
+                console.error('║ Message:', error.response.data?.message || 'N/A');
             }
-            throw new Error(`Falha na autenticação com Banco Inter: ${error.response?.data?.error_description || error.message}`);
+            if (error.request) {
+                console.error('║ Request foi enviada mas sem resposta');
+            }
+            console.error('╚══════════════════════════════════════════════════════════════╝');
+            console.error('');
+
+            throw new Error(`Falha na autenticação com Banco Inter: ${error.response?.data?.error_description || error.response?.data?.message || error.message}`);
         }
     }
 
