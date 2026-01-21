@@ -29,14 +29,24 @@ class InterBankService {
     decryptCredential(encryptedValue) {
         // Se criptografia não estiver ativa, retorna o valor como está
         if (!encryptionService.isConfigured()) {
+            console.warn('⚠️ Criptografia NÃO está ativa - retornando valor original');
             return encryptedValue;
         }
-        const decrypted = encryptionService.decrypt(encryptedValue);
-        if (!decrypted) {
-            // Se falhou ao descriptografar, assume que não está criptografado
+
+        try {
+            const decrypted = encryptionService.decrypt(encryptedValue);
+            if (!decrypted) {
+                console.error('❌ Descriptografia retornou null/vazio - valor pode não estar criptografado');
+                console.error('   Valor original length:', encryptedValue?.length);
+                // Se falhou ao descriptografar, assume que não está criptografado
+                return encryptedValue;
+            }
+            console.log('✅ Descriptografia OK - length original:', encryptedValue?.length, '-> length final:', decrypted.length);
+            return decrypted;
+        } catch (error) {
+            console.error('❌ Erro ao descriptografar:', error.message);
             return encryptedValue;
         }
-        return decrypted;
     }
 
     /**
