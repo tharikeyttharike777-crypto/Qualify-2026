@@ -66,12 +66,15 @@ class InterBankService {
             console.log('🔐 Iniciando autenticação Inter para empresa:', empresaId);
 
             // Descriptografa credenciais
+            console.log('🔑 Criptografia ativa:', encryptionService.isConfigured());
             const clientId = this.decryptCredential(empresaConfig.clientId);
             const clientSecret = this.decryptCredential(empresaConfig.clientSecret);
 
             console.log('📋 Credenciais obtidas:');
-            console.log('   - Client ID length:', clientId?.length || 0);
-            console.log('   - Client Secret length:', clientSecret?.length || 0);
+            console.log('   - Client ID criptografado length:', empresaConfig.clientId?.length || 0);
+            console.log('   - Client ID descriptografado length:', clientId?.length || 0);
+            console.log('   - Client Secret criptografado length:', empresaConfig.clientSecret?.length || 0);
+            console.log('   - Client Secret descriptografado length:', clientSecret?.length || 0);
             console.log('   - Chave PIX:', empresaConfig.chavePix || 'NÃO DEFINIDA');
             console.log('   - Sandbox:', empresaConfig.sandbox);
             console.log('   - Tem certBase64:', !!empresaConfig.certBase64);
