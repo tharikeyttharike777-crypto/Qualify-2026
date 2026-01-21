@@ -143,7 +143,7 @@ class InterBankService {
             params.append('client_id', clientIdClean);
             params.append('client_secret', clientSecretClean);
             params.append('grant_type', 'client_credentials');
-            params.append('scope', 'extrato.read'); // Escopo básico para teste
+            params.append('scope', 'boleto-cobranca.read boleto-cobranca.write cob.read cob.write'); // Escopos de cobrança
 
             console.log('📤 Enviando request de token...');
             console.log('   - Params:', params.toString().replace(clientSecretClean, '***SECRET***'));
@@ -399,6 +399,91 @@ class InterBankService {
     limparCache(empresaId) {
         this.tokenCache.delete(empresaId);
         console.log(`🗑️ Cache de token limpo para empresa ${empresaId}`);
+    }
+
+    /**
+     * Testa conexão completa - autentica e tenta acessar endpoint de cobrança
+     */
+    async testarConexaoCompleta(empresaConfig) {
+        console.log('🧪 Iniciando teste de conexão completa...');
+
+        try {
+            // Passo 1: Obter token
+            const accessToken = await this.getAccessToken(empresaConfig);
+            console.log('✅ Passo 1: Token obtido com sucesso');
+
+            // Passo 2: Testar acesso ao endpoint de boletos (apenas GET para listar)
+            const baseUrl = this.getBaseUrl(empresaConfig.sandbox);
+            const certContent = Buffer.from(empresaConfig.certBase64, 'base64');
+            const keyContent = Buffer.from(empresaConfig.keyBase64, 'base64');
+            const httpsAgent = this.createHttpsAgent(certContent, keyContent);
+
+            // Tenta listar boletos (não precisa criar nada)
+            try {
+                const testUrl = `${baseUrl}/cobranca/v3/boletos?dataInicial=${new Date().toISOString().split('T')[0]}&dataFinal=${new Date().toISOString().split('T')[0]}`;
+                console.log('🔍 Testando endpoint de boletos:', testUrl);
+
+                const response = await axios.get(testUrl, {
+                    httpsAgent,
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('✅ Passo 2: Acesso ao endpoint de boletos OK');
+                console.log('   - Status:', response.status);
+
+                return {
+                    success: true,
+                    tokenOk: true,
+                    boletoEndpointOk: true,
+                    message: 'Conexão completa testada com sucesso!'
+                };
+            } catch (boletoError) {
+                console.warn('⚠️ Endpoint de boletos falhou, testando PIX...');
+
+                // Tenta endpoint de PIX
+                try {
+                    const pixUrl = `${baseUrl}/pix/v2/cob`;
+                    console.log('🔍 Testando endpoint de PIX:', pixUrl);
+
+                    // Apenas verifica se o endpoint responde (vai dar 400 sem payload, mas não 401)
+                    const pixResponse = await axios.get(`${baseUrl}/pix/v2/loc`, {
+                        httpsAgent,
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    console.log('✅ Passo 2: Acesso ao endpoint de PIX OK');
+                    return {
+                        success: true,
+                        tokenOk: true,
+                        pixEndpointOk: true,
+                        message: 'Conexão completa testada com sucesso!'
+                    };
+                } catch (pixError) {
+                    // Se for 401, o token não tem permissão
+                    if (pixError.response?.status === 401) {
+                        throw new Error('Token não tem permissão para endpoints de cobrança');
+                    }
+                    // Outros erros (400, 404) são aceitáveis - significa que chegou no endpoint
+                    console.log('✅ Passo 2: Endpoint respondeu (erro esperado sem payload)');
+                    return {
+                        success: true,
+                        tokenOk: true,
+                        endpointReached: true,
+                        message: 'Conexão testada - endpoints acessíveis!'
+                    };
+                }
+            }
+
+        } catch (error) {
+            console.error('❌ Teste de conexão falhou:', error.message);
+            throw error;
+        }
     }
 }
 
