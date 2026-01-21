@@ -122,7 +122,7 @@ class InterBankService {
             params.append('client_id', clientId);
             params.append('client_secret', clientSecret);
             params.append('grant_type', 'client_credentials');
-            params.append('scope', 'cob.write pix.write');
+            params.append('scope', 'cob.write cob.read');
 
             console.log('📤 Enviando request de token...');
 
