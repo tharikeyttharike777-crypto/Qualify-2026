@@ -244,6 +244,65 @@ router.post('/:empresaId/bancaria/testar', async (req, res) => {
 });
 
 /**
+ * GET /api/config/:empresaId/bancaria/debug
+ * Endpoint de diagnóstico para verificar estado das credenciais
+ */
+router.get('/:empresaId/bancaria/debug', async (req, res) => {
+    try {
+        const { empresaId } = req.params;
+        const db = req.app.get('db');
+
+        const configRef = db.collection('empresas').doc(empresaId)
+            .collection('configuracaoBancaria').doc('inter');
+
+        const configDoc = await configRef.get();
+
+        if (!configDoc.exists) {
+            return res.json({ error: 'Configuração não encontrada' });
+        }
+
+        const config = configDoc.data();
+
+        // Testa descriptografia
+        const encryptionActive = encryptionService.isConfigured();
+        let clientIdDecrypted = null;
+        let clientSecretDecrypted = null;
+        let decryptError = null;
+
+        try {
+            clientIdDecrypted = encryptionService.decrypt(config.clientId);
+            clientSecretDecrypted = encryptionService.decrypt(config.clientSecret);
+        } catch (e) {
+            decryptError = e.message;
+        }
+
+        res.json({
+            encryptionKeyConfigured: encryptionActive,
+            clientId: {
+                storedLength: config.clientId?.length || 0,
+                decryptedLength: clientIdDecrypted?.length || 0,
+                decryptedPreview: clientIdDecrypted ? clientIdDecrypted.substring(0, 8) + '...' : null
+            },
+            clientSecret: {
+                storedLength: config.clientSecret?.length || 0,
+                decryptedLength: clientSecretDecrypted?.length || 0,
+                decryptSuccess: !!clientSecretDecrypted
+            },
+            certificates: {
+                certBase64Length: config.certBase64?.length || 0,
+                keyBase64Length: config.keyBase64?.length || 0
+            },
+            chavePix: config.chavePix,
+            sandbox: config.sandbox,
+            decryptError: decryptError
+        });
+
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * DELETE /api/config/:empresaId/bancaria/inter
  * Remove configuração bancária
  */
