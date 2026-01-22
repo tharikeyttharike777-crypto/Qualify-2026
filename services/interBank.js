@@ -144,8 +144,8 @@ class InterBankService {
             params.append('client_secret', clientSecretClean);
             params.append('grant_type', 'client_credentials');
 
-            // ESCOPO HARDCODED - NÃO MUDE ISSO!
-            const SCOPE_COBRANCA = 'boleto-cobranca.read boleto-cobranca.write cob.read cob.write';
+            // ESCOPO APENAS PIX - boleto removido temporariamente
+            const SCOPE_COBRANCA = 'cob.write cob.read';
             params.append('scope', SCOPE_COBRANCA);
 
             console.log('');
