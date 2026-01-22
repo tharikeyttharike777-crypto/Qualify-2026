@@ -264,13 +264,28 @@ class InterBankService {
 
         // Função para fazer a requisição (usada no retry)
         const fazerRequisicao = async (token) => {
-            return await axios.put(url, payload, {
-                httpsAgent,
+            console.log('');
+            console.log('╔══════════════════════════════════════════════════════════════╗');
+            console.log('║     🔒 VERIFICAÇÃO mTLS ANTES DA REQUISIÇÃO PIX              ║');
+            console.log('╠══════════════════════════════════════════════════════════════╣');
+            console.log('║ httpsAgent existe:', !!httpsAgent);
+            console.log('║ httpsAgent options.cert existe:', !!httpsAgent?.options?.cert);
+            console.log('║ httpsAgent options.key existe:', !!httpsAgent?.options?.key);
+            console.log('║ Token length:', token?.length || 0);
+            console.log('╚══════════════════════════════════════════════════════════════╝');
+            console.log('');
+
+            const axiosConfig = {
+                httpsAgent: httpsAgent,
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
-            });
+            };
+
+            console.log('🔐 Enviando PIX com Agent mTLS:', !!axiosConfig.httpsAgent);
+
+            return await axios.put(url, payload, axiosConfig);
         };
 
         try {
